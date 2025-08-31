@@ -1,6 +1,7 @@
 package data;
 
 import java.io.IOException;
+import java.io.BufferedReader;
 import java.nio.file.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -265,4 +266,99 @@ public class DatasetLoader {
         for (int i = 0; i < rows.size(); i++) v[i] = rows.get(i);
         return v;
     }
+
+    /** טוען קובץ iris.csv: 4 פיצ'רים מספריים + עמודת תווית.
+     *  תומך בכותרת, מירכאות, ומפריד ',' או ';' (אוטו-דיטקט).
+     */
+    public Dataset loadIris(String csvPath, double trainRatio, long seed) throws IOException {
+        List<double[]> feats = new ArrayList<>();
+        List<Integer> labs = new ArrayList<>();
+
+        try (BufferedReader br = Files.newBufferedReader(Path.of(csvPath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+
+                // אוטו-דיטקט למפריד
+                String delim = line.indexOf(';') >= 0 ? ";" : ",";
+
+                // פיצול + הסרת מירכאות מכל תא
+                String[] raw = line.split(delim, -1);
+                String[] p = new String[raw.length];
+                for (int i = 0; i < raw.length; i++) {
+                    p[i] = raw[i].trim();
+                    if (p[i].length() >= 2 && p[i].startsWith("\"") && p[i].endsWith("\"")) {
+                        p[i] = p[i].substring(1, p[i].length() - 1);
+                    }
+                }
+
+                // דלג על כותרת: אם התא הראשון לא מספרי (למשל "sepal.length")
+                if (p.length >= 5) {
+                    boolean firstNumeric;
+                    try { Double.parseDouble(p[0]); firstNumeric = true; }
+                    catch (Exception e) { firstNumeric = false; }
+                    if (!firstNumeric) continue; // כותרת או שורה לא תקינה
+                } else {
+                    continue;
+                }
+
+                // קריאת 4 פיצ'רים
+                double[] x = new double[4];
+                try {
+                    for (int i = 0; i < 4; i++) x[i] = Double.parseDouble(p[i]);
+                } catch (NumberFormatException nfe) {
+                    // אם יש שורה מקולקלת – נדלג עליה
+                    continue;
+                }
+
+                // מיפוי תווית למחלקה 0/1/2
+                String label = p[4].trim();
+                label = label.replace("\"", "");
+                label = label.toLowerCase(Locale.ROOT);
+                if (label.startsWith("iris-")) label = label.substring("iris-".length()); // "iris-setosa" -> "setosa"
+
+                int y = switch (label) {
+                    case "setosa" -> 0;
+                    case "versicolor" -> 1;
+                    case "virginica" -> 2;
+                    default -> {
+                        // יש קבצים שבהם העמודה נקראת "species" אבל הערך ריק/שונה – נדלג
+                        // System.out.println("Skipping unknown iris label: " + p[4]);
+                        yield -1;
+                    }
+                };
+                if (y < 0) continue;
+
+                feats.add(x);
+                labs.add(y);
+            }
+        }
+
+        int n = feats.size(), d = 4;
+        if (n == 0) throw new IllegalStateException("No Iris rows parsed from: " + csvPath);
+
+        // ערבוב
+        int[] idx = new int[n];
+        for (int i = 0; i < n; i++) idx[i] = i;
+        Random rnd = new Random(seed);
+        for (int i = n - 1; i > 0; i--) {
+            int j = rnd.nextInt(i + 1);
+            int t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+        }
+
+        int split = Math.max(1, Math.min(n - 1, (int)Math.round(trainRatio * n)));
+
+        double[][] Xtr = new double[split][d];
+        double[][] Xte = new double[n - split][d];
+        int[] ytr = new int[split];
+        int[] yte = new int[n - split];
+
+        for (int i = 0; i < split; i++) { Xtr[i] = feats.get(idx[i]); ytr[i] = labs.get(idx[i]); }
+        for (int i = split; i < n; i++) { Xte[i - split] = feats.get(idx[i]); yte[i - split] = labs.get(idx[i]); }
+
+        return new Dataset(Xtr, ytr, Xte, yte, null, null);
+    }
+
+
 }

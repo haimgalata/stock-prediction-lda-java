@@ -102,18 +102,31 @@ public final class Metrics {
 
     public static void printConfusion(int[][] cm) {
         int K = cm.length;
-        String[] names = {
-                "0=Strong Down",
-                "1=Down",
-                "2=No Change",
-                "3=Up",
-                "4=Strong Up"
-        };
+        String[] names;
+
+        if (K == 5) {
+            names = new String[]{
+                    "0=Strong Down",
+                    "1=Down",
+                    "2=No Change",
+                    "3=Up",
+                    "4=Strong Up"
+            };
+        } else if (K == 3) {
+            names = new String[]{
+                    "0=setosa",
+                    "1=versicolor",
+                    "2=virginica"
+            };
+        } else {
+            names = new String[K];
+            for (int i = 0; i < K; i++) names[i] = String.valueOf(i);
+        }
 
         System.out.println("Confusion Matrix (rows=true, cols=pred):");
 
         // הדפסת כותרות לעמודות
-        System.out.printf("%-14s", "True\\Pred");  // כותרת בפינה השמאלית
+        System.out.printf("%-14s", "True\\Pred");
         for (int j = 0; j < K; j++) {
             System.out.printf("%12s", names[j]);
         }
@@ -121,13 +134,14 @@ public final class Metrics {
 
         // הדפסת שורות עם שם המחלקה
         for (int i = 0; i < K; i++) {
-            System.out.printf("%-14s", names[i]);  // שם השורה (האמת)
+            System.out.printf("%-14s", names[i]);
             for (int j = 0; j < K; j++) {
                 System.out.printf("%12d", cm[i][j]);
             }
             System.out.println();
         }
     }
+
 
 
     /** Macro-averaged F1 score */
@@ -150,6 +164,18 @@ public final class Metrics {
         }
         return sumF1 / Math.max(1, count);
     }
+
+
+    public static void savePredictionsSimple(Path path, int[] y, int[] yhat) throws IOException {
+        try (var w = Files.newBufferedWriter(path)) {
+            w.write("index,true_label,pred_label,correct\n");
+            for (int i = 0; i < y.length; i++) {
+                boolean ok = (y[i] == yhat[i]);
+                w.write(i + "," + y[i] + "," + yhat[i] + "," + ok + "\n");
+            }
+        }
+    }
+
 
 
 }
